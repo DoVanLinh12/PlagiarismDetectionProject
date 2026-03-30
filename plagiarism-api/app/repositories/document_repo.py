@@ -1,5 +1,6 @@
 import uuid
 import asyncpg
+from app.services.minhash import jaccard_similarity
 
 
 async def insert_document(
@@ -8,7 +9,6 @@ async def insert_document(
     subject_id: str,
     file_path: str,
 ) -> str:
-    """Tạo record document mới, minhash để NULL."""
     doc_id = str(uuid.uuid4())
     await conn.execute(
         """
@@ -25,7 +25,6 @@ async def update_minhash(
     doc_id: str,
     minhash: list[int],
 ):
-    """Cập nhật minhash sau khi xử lý xong."""
     await conn.execute(
         "UPDATE documents SET minhash = $1 WHERE id = $2",
         minhash, doc_id,
@@ -46,9 +45,43 @@ async def document_exists(
     file_name: str,
     subject_id: str,
 ) -> bool:
-    """Kiểm tra file đã tồn tại trong môn học chưa."""
     row = await conn.fetchrow(
         "SELECT id FROM documents WHERE file_name = $1 AND subject_id = $2",
         file_name, subject_id,
     )
     return row is not None
+
+
+async def find_candidates_by_minhash(
+    conn: asyncpg.Connection,
+    minhash: list[int],
+    subject_id: str,
+    threshold: float = 0.5,
+) -> list[dict]:
+    """
+    Lọc thô: lấy các tài liệu tham chiếu cùng môn học,
+    tính Jaccard similarity qua MinHash,
+    trả về các tài liệu có similarity >= threshold.
+    """
+    rows = await conn.fetch(
+        """
+        SELECT id, file_name, subject_id, minhash
+        FROM documents
+        WHERE subject_id = $1
+          AND minhash IS NOT NULL
+        """,
+        subject_id,
+    )
+
+    candidates = []
+    for row in rows:
+        sim = jaccard_similarity(minhash, list(row["minhash"]))
+        if sim >= threshold:
+            candidates.append({
+                "document_id": str(row["id"]),
+                "file_name":   row["file_name"],
+                "subject_id":  row["subject_id"],
+                "jaccard_similarity": round(sim, 4),
+            })
+
+    return sorted(candidates, key=lambda x: x["jaccard_similarity"], reverse=True)

@@ -100,3 +100,62 @@ def insert_sentences(
 
     collection.flush()
     return total
+
+
+def search_similar_sentences(
+    query_embeddings: list[list[float]],
+    document_id: str,
+    top_k: int = 1,
+    similarity_threshold: float = 0.8,
+) -> list[dict | None]:
+    """
+    Với mỗi câu trong query_embeddings, tìm câu giống nhất
+    trong document_id chỉ định.
+
+    Trả về list[dict | None] — cùng độ dài với query_embeddings.
+    None nếu không có câu nào vượt ngưỡng.
+    """
+    collection = create_collection_if_not_exists()
+
+    output_fields = [
+        "document_id", "file_name", "subject_id",
+        "sentence_index", "sentence_index_page",
+        "page_number", "sentence_text",
+        "bbox_x0", "bbox_y0", "bbox_x1", "bbox_y1",
+    ]
+
+    results = []
+    batch_size = 50  # tránh query quá lớn
+
+    for start in range(0, len(query_embeddings), batch_size):
+        batch = query_embeddings[start:start + batch_size]
+
+        search_results = collection.search(
+            data=batch,
+            anns_field="embedding",
+            param={"metric_type": "COSINE", "params": {"ef": 64}},
+            limit=top_k,
+            expr=f'document_id == "{document_id}"',
+            output_fields=output_fields,
+        )
+
+        for hits in search_results:
+            if hits and hits[0].score >= similarity_threshold:
+                hit = hits[0]
+                results.append({
+                    "document_id":         hit.entity.get("document_id"),
+                    "file_name":           hit.entity.get("file_name"),
+                    "sentence_index":      hit.entity.get("sentence_index"),
+                    "sentence_index_page": hit.entity.get("sentence_index_page"),
+                    "page_number":         hit.entity.get("page_number"),
+                    "sentence_text":       hit.entity.get("sentence_text"),
+                    "bbox_x0":             hit.entity.get("bbox_x0"),
+                    "bbox_y0":             hit.entity.get("bbox_y0"),
+                    "bbox_x1":             hit.entity.get("bbox_x1"),
+                    "bbox_y1":             hit.entity.get("bbox_y1"),
+                    "similarity":          round(hit.score, 4),
+                })
+            else:
+                results.append(None)
+
+    return results
