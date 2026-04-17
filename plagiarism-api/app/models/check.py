@@ -19,6 +19,9 @@ class ReferenceMatch(BaseModel):
     plagiarized_count: int           # số câu d bị đạo văn từ tài liệu này
     matched_sentences: list[MatchedSentence]
 
+# class Candidate(BaseModel):
+#     document_id: str
+#     jaccard_similarity: float
 
 class CheckResponse(BaseModel):
     total_sentences: int             # tổng số câu của tài liệu đẩy lên
@@ -26,4 +29,4 @@ class CheckResponse(BaseModel):
     plagiarism_ratio: float          # P = số câu đạo văn / tổng câu
     is_plagiarized: bool             # P > 80%
     sentence_labels: list[int]       # 0/1 cho từng câu của d
-    references: list[ReferenceMatch] # chi tiết từng tài liệu tham chiếu
+    references: list[ReferenceMatch] 

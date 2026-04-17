@@ -17,3 +17,4 @@ protobuf>=3.20.0
 ujson>=2.0.0
 pandas>=1.2.4
 pymilvus==2.2.11
+sickit-learn==1.3.2

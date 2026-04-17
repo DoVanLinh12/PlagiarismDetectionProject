@@ -11,7 +11,7 @@ from app.services.checker import run_plagiarism_check
 router = APIRouter()
 
 ALLOWED_CONTENT_TYPES = {"application/pdf"}
-MINHASH_THRESHOLD = 0.5   # lọc thô: giữ tài liệu có Jaccard >= 50%
+MINHASH_THRESHOLD = 0.05   # lọc thô: giữ tài liệu có Jaccard >= 50%
 
 
 @router.post(
@@ -75,4 +75,4 @@ async def check_plagiarism(
         candidates=candidates,
     )
 
-    return result
+    return result 

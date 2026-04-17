@@ -39,7 +39,7 @@ def create_collection_if_not_exists() -> Collection:
         FieldSchema(name="sentence_index",      dtype=DataType.INT64),
         FieldSchema(name="sentence_index_page", dtype=DataType.INT64),
         FieldSchema(name="page_number",         dtype=DataType.INT64),
-        FieldSchema(name="sentence_text",       dtype=DataType.VARCHAR,      max_length=2000),
+        FieldSchema(name="sentence_text",       dtype=DataType.VARCHAR,      max_length=10000),
         FieldSchema(name="bbox_x0",             dtype=DataType.DOUBLE),
         FieldSchema(name="bbox_y0",             dtype=DataType.DOUBLE),
         FieldSchema(name="bbox_x1",             dtype=DataType.DOUBLE),
