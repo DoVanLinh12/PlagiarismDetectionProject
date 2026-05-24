@@ -6,7 +6,7 @@ from app.core.database import get_conn, release_conn
 from app.models.check import CheckResponse
 from app.repositories import document_repo
 from app.services import embedding, minhash, preprocessing
-from app.services.checker import run_plagiarism_check
+from app.services.checker import find_candidate
 
 router = APIRouter()
 
@@ -43,8 +43,9 @@ async def check_plagiarism(
     minhash_values = minhash.compute_minhash(full_text)
 
     conn = await get_conn()
+    
     try:
-        candidates = await document_repo.find_candidates_by_minhash(
+        candidates = await minhash.find_candidates_by_minhash(
             conn=conn,
             minhash=minhash_values,
             subject_id=subject_id,
@@ -53,23 +54,12 @@ async def check_plagiarism(
     finally:
         await release_conn(conn)
 
-    # Không có tài liệu nào vượt ngưỡng lọc thô
-    if not candidates:
-        return CheckResponse(
-            total_sentences=len(sentences),
-            plagiarized_sentences=0,
-            plagiarism_ratio=0.0,
-            is_plagiarized=False,
-            sentence_labels=[0] * len(sentences),
-            references=[],
-        )
-
     # 3. Embedding tài liệu đẩy lên
     sentence_texts = [s.sentence_text for s in sentences]
     embeddings = embedding.embed_sentences(sentence_texts)
 
     # 4. So khớp chi tiết với từng tài liệu tham chiếu
-    result = run_plagiarism_check(
+    result = find_candidate(
         query_sentences=sentences,
         query_embeddings=embeddings,
         candidates=candidates,
