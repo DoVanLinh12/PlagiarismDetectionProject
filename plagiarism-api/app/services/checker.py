@@ -129,3 +129,28 @@ def run_plagiarism_check(
         sentence_labels=sentence_labels,
         references=ref_match,
     )
+
+def find_candidate(
+    query_sentences: list[SentenceRecord],
+    query_embeddings: list[list[float]],
+    candidates: list[dict],
+) -> CheckResponse:
+    if not candidates:
+        return CheckResponse(
+            total_sentences=len(query_sentences),
+            plagiarized_sentences=0,
+            plagiarism_ratio=0.0,
+            is_plagiarized=False,
+            sentence_labels=[0] * len(query_sentences),
+            references=[],
+        )
+    # Lấy candidate có jaccard_similarity cao nhất
+    best = max(candidates, key=lambda c: c["jaccard_similarity"])
+    result = run_plagiarism_check(
+        query_sentences=query_sentences,
+        query_embeddings=query_embeddings,
+        candidates=[best],
+    )
+    return result
+
+    
