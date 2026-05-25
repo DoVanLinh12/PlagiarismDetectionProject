@@ -2,10 +2,10 @@ from app.models.check import CheckResponse, MatchedSentence, ReferenceMatch
 from app.repositories import milvus_repo
 from app.services.preprocessing import SentenceRecord
 from pymilvus import Collection
-from sklearn.metrics.pairwise import cosine_similarity
 
-SENTENCE_SIMILARITY_THRESHOLD = 0.8  
-PLAGIARISM_CONCLUSION_THRESHOLD = 0.8 
+SENTENCE_SIMILARITY_THRESHOLD = 0.8
+PLAGIARISM_CONCLUSION_THRESHOLD = 0.8
+
 
 def check_against_single_reference(
     query_sentences: list[SentenceRecord],
@@ -54,12 +54,12 @@ def check_against_single_reference(
         ))
 
     if plagiarized_count > 0:
-        # Chỉ khi có trùng mới đi tìm total_ref_sentences để tính tỉ lệ
         res = collection.query(expr=f"document_id == '{document_id}'", output_fields=["count(*)"])
         total_ref_sentences = res[0].get("count(*)", 1) if res else 1
         plagiarism_ratio = round(plagiarized_count / total_ref_sentences, 4)
     else:
         plagiarism_ratio = 0.0
+
     return plagiarized_count, matched_sentences, plagiarism_ratio
 
 
@@ -75,7 +75,8 @@ def check(
 
     reference_matches: list[ReferenceMatch] = []
 
-    for candidate in candidates:
+    for ref_id, candidate in enumerate(candidates, start=1):
+        # Lấy các câu chưa bị đánh dấu đạo văn để so sánh với tài liệu tiếp theo
         active_indices = [c for c, lbl in enumerate(sentence_labels) if lbl == 0]
         if not active_indices:
             break
@@ -91,9 +92,11 @@ def check(
             )
             if p_count > 0:
                 reference_matches.append(ReferenceMatch(
+                    id=ref_id,
                     document_id=candidate["document_id"],
                     file_name=candidate["file_name"],
                     subject_id=candidate["subject_id"],
+                    group_id=candidate.get("group_id"),
                     jaccard_similarity=candidate["jaccard_similarity"],
                     plagiarism_ratio=p_ratio,
                     plagiarized_count=p_count,
@@ -103,6 +106,7 @@ def check(
             print(f"Error checking document {candidate['document_id']}: {e}")
 
     return reference_matches
+
 
 def run_plagiarism_check(
     query_sentences: list[SentenceRecord],
@@ -118,7 +122,8 @@ def run_plagiarism_check(
         candidates=candidates,
         sentence_labels=sentence_labels,
     )
-    total_plagiarized = sum(m.plagiarized_count for m in ref_match)
+
+    total_plagiarized = sum(sentence_labels)
     plagiarism_ratio = round(total_plagiarized / total_sentences, 4) if total_sentences > 0 else 0.0
 
     return CheckResponse(
@@ -126,9 +131,10 @@ def run_plagiarism_check(
         plagiarized_sentences=total_plagiarized,
         plagiarism_ratio=plagiarism_ratio,
         is_plagiarized=plagiarism_ratio > PLAGIARISM_CONCLUSION_THRESHOLD,
-        sentence_labels=sentence_labels,
+        sentence_labels=[],
         references=ref_match,
     )
+
 
 def find_candidate(
     query_sentences: list[SentenceRecord],
@@ -144,13 +150,12 @@ def find_candidate(
             sentence_labels=[0] * len(query_sentences),
             references=[],
         )
-    # Lấy candidate có jaccard_similarity cao nhất
+    
     best = max(candidates, key=lambda c: c["jaccard_similarity"])
+
     result = run_plagiarism_check(
         query_sentences=query_sentences,
         query_embeddings=query_embeddings,
         candidates=[best],
     )
     return result
-
-    
