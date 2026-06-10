@@ -11,8 +11,18 @@ from app.services.checker import find_candidate
 
 router = APIRouter()
 
-ALLOWED_CONTENT_TYPES = {"application/pdf"}
+ALLOWED_CONTENT_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+ALLOWED_FILE_EXTENSIONS = {".pdf", ".docx"}
 MINHASH_THRESHOLD = 0.05   # lọc thô: giữ tài liệu có Jaccard >= 5%
+
+
+def _get_file_extension(filename: str | None) -> str:
+    if not filename or "." not in filename:
+        return ""
+    return "." + filename.rsplit(".", 1)[-1].lower()
 
 
 @router.post(
@@ -26,9 +36,13 @@ async def check_plagiarism(
     submission_id: int | None = Form(None, description="ID bài nộp (tuỳ chọn)"),
     topic_id: int | None = Form(None, description="ID đề tài (tuỳ chọn)"),
 ):
-    if file.content_type not in ALLOWED_CONTENT_TYPES:
+    file_extension = _get_file_extension(file.filename)
+    if (
+        file.content_type not in ALLOWED_CONTENT_TYPES
+        and file_extension not in ALLOWED_FILE_EXTENSIONS
+    ):
         from fastapi import HTTPException
-        raise HTTPException(status_code=400, detail="Chỉ chấp nhận file PDF")
+        raise HTTPException(status_code=400, detail="Chỉ chấp nhận file PDF hoặc DOCX")
 
     file_bytes = await file.read()
     if len(file_bytes) == 0:
@@ -36,7 +50,11 @@ async def check_plagiarism(
         raise HTTPException(status_code=400, detail="File rỗng")
 
     # 1. Tiền xử lý tài liệu đẩy lên
-    full_text, sentences = preprocessing.extract_and_preprocess(BytesIO(file_bytes))
+    try:
+        full_text, sentences = preprocessing.extract_and_preprocess(BytesIO(file_bytes))
+    except ValueError as exc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if not sentences:
         from fastapi import HTTPException

@@ -10,7 +10,17 @@ from app.services import embedding, minhash, preprocessing, storage
 
 router = APIRouter()
 
-ALLOWED_CONTENT_TYPES = {"application/pdf"}
+ALLOWED_CONTENT_TYPES = {
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+}
+ALLOWED_FILE_EXTENSIONS = {".pdf", ".docx"}
+
+
+def _get_file_extension(filename: str | None) -> str:
+    if not filename or "." not in filename:
+        return ""
+    return "." + filename.rsplit(".", 1)[-1].lower()
 
 
 @router.post(
@@ -29,8 +39,12 @@ async def upload_documents(
         try:
             print(f"\n[UPLOAD] Bắt đầu xử lý: {file.filename}")
 
-            if file.content_type not in ALLOWED_CONTENT_TYPES:
-                errors.append({"file_name": file.filename, "error": f"Chỉ chấp nhận PDF, nhận: {file.content_type}"})
+            file_extension = _get_file_extension(file.filename)
+            if (
+                file.content_type not in ALLOWED_CONTENT_TYPES
+                and file_extension not in ALLOWED_FILE_EXTENSIONS
+            ):
+                errors.append({"file_name": file.filename, "error": f"Chỉ chấp nhận PDF hoặc DOCX, nhận: {file.content_type}"})
                 continue
 
             file_bytes = await file.read()
@@ -50,7 +64,7 @@ async def upload_documents(
                 # 1. Upload → MinIO
                 file_id = str(uuid.uuid4())
                 file_path = f"documents/{subject_id}/{file_id}/{file.filename}"
-                storage.upload_file(file_bytes, file_path)
+                storage.upload_file(file_bytes, file_path, file.content_type)
                 print(f"[UPLOAD] MinIO OK: {file_path}")
 
                 # 2. Lưu Postgres
