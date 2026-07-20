@@ -1,13 +1,16 @@
 from datetime import datetime, timezone
 from io import BytesIO
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
 from app.core.database import get_conn, release_conn
-from app.models.check import CheckReport, CheckResponse
+from app.models.check import (
+    CheckReport,
+    CheckResponse,
+)
 from app.repositories import document_repo
 from app.services import embedding, minhash, preprocessing
-from app.services.checker import find_candidate
+from app.services.checker import  find_candidate
 
 router = APIRouter()
 
@@ -16,7 +19,7 @@ ALLOWED_CONTENT_TYPES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
 }
 ALLOWED_FILE_EXTENSIONS = {".pdf", ".docx"}
-MINHASH_THRESHOLD = 0.05   # lọc thô: giữ tài liệu có Jaccard >= 5%
+MINHASH_THRESHOLD = 0
 
 
 def _get_file_extension(filename: str | None) -> str:
@@ -41,30 +44,23 @@ async def check_plagiarism(
         file.content_type not in ALLOWED_CONTENT_TYPES
         and file_extension not in ALLOWED_FILE_EXTENSIONS
     ):
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Chỉ chấp nhận file PDF hoặc DOCX")
 
     file_bytes = await file.read()
     if len(file_bytes) == 0:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="File rỗng")
 
-    # 1. Tiền xử lý tài liệu đẩy lên
     try:
         full_text, sentences = preprocessing.extract_and_preprocess(BytesIO(file_bytes))
     except ValueError as exc:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if not sentences:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Không trích xuất được câu nào từ file")
 
-    # 2. Tạo MinHash → lọc thô
     minhash_values = minhash.compute_minhash(full_text)
 
     conn = await get_conn()
-
     try:
         candidates = await minhash.find_candidates_by_minhash(
             conn=conn,
@@ -75,11 +71,9 @@ async def check_plagiarism(
     finally:
         await release_conn(conn)
 
-    # 3. Embedding tài liệu đẩy lên
     sentence_texts = [s.sentence_text for s in sentences]
     embeddings = embedding.embed_sentences(sentence_texts)
 
-    # 4. So khớp chi tiết với từng tài liệu tham chiếu
     check_result: CheckResponse = find_candidate(
         query_sentences=sentences,
         query_embeddings=embeddings,

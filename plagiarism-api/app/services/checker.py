@@ -26,7 +26,7 @@ def check_against_single_reference(
     results = collection.search(
         data=active_embeddings,
         anns_field="embedding",
-        param={"metric_type": "COSINE", "params": {"nprobe": 10}},
+        param={"metric_type": "COSINE", "params": {"efsearch": 64 }},
         limit=1,
         expr=f"document_id == '{document_id}'",
         output_fields=["sentence_text", "page_number"],
@@ -135,7 +135,6 @@ def run_plagiarism_check(
         references=ref_match,
     )
 
-
 def find_candidate(
     query_sentences: list[SentenceRecord],
     query_embeddings: list[list[float]],
@@ -151,11 +150,9 @@ def find_candidate(
             references=[],
         )
     
-    best = max(candidates, key=lambda c: c["jaccard_similarity"])
-
     result = run_plagiarism_check(
         query_sentences=query_sentences,
         query_embeddings=query_embeddings,
-        candidates=[best],
+        candidates=candidates,
     )
     return result

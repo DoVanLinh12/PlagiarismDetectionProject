@@ -133,7 +133,7 @@ def search_similar_sentences(
         search_results = collection.search(
             data=batch,
             anns_field="embedding",
-            param={"metric_type": "COSINE", "params": {"ef": 64}},
+            param={"metric_type": "COSINE", "params": {"efsearch": 64}},
             limit=top_k,
             expr=f'document_id == "{document_id}"',
             output_fields=output_fields,
